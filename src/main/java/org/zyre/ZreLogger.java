@@ -83,7 +83,7 @@ public class ZreLogger
         
         Calendar now = Calendar.getInstance();
         now.setTimeInMillis (curtime);
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-DD HH:mm:SS");
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         String timestr = df.format (now.getTime ());
 
         System.out.printf ("%s I: [%04X] [%04X] - %s %s\n",
