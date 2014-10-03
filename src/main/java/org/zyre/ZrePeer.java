@@ -25,10 +25,17 @@
 */
 package org.zyre;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import org.zeromq.ZContext;
+import org.zeromq.ZFrame;
 import org.zeromq.ZMQ;
 import org.zeromq.ZMQ.Socket;
 
@@ -49,6 +56,8 @@ public class ZrePeer
     private int sent_sequence;           //  Outgoing message sequence
     private int want_sequence;           //  Incoming message sequence
     private Map <String, String> headers;           //  Peer headers
+
+    private ZrePeer () {}
     
     private ZrePeer (ZContext ctx, String identity)
     {
@@ -201,7 +210,7 @@ public class ZrePeer
 
     public String header (String key, String defaultValue)
     {
-        if (headers.containsKey (key))
+        if (headers != null && headers.containsKey (key))
             return headers.get (key);
         
         return defaultValue;
@@ -226,4 +235,114 @@ public class ZrePeer
         return valid;
     }
 
+    ZFrame toFrame () {
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream os = new DataOutputStream(bos);
+
+        try {
+            writeNullable(os, identity);
+            writeNullable(os, endpoint);
+            os.writeLong(evasive_at);
+            os.writeLong(expired_at);
+            os.writeBoolean(connected);
+            os.writeBoolean(ready);
+            os.writeInt(status);
+            os.writeInt(sent_sequence);
+            os.writeInt(want_sequence);
+            if (headers == null) {
+                os.writeInt(0);
+            } else {
+                os.writeInt(headers.size());
+                for (Map.Entry<String, String> e : headers.entrySet()) {
+                    os.writeUTF(e.getKey());
+                    writeNullable(os, e.getValue());
+                }
+            }
+            os.close();
+
+            byte buf[] = bos.toByteArray();
+            return new ZFrame(buf);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+   }
+
+    public static ZrePeer fromFrame (ZFrame frame) {
+        if (frame == null) {
+            return null;
+        }
+
+        ByteArrayInputStream bis = new ByteArrayInputStream(frame.getData());
+        DataInputStream is = new DataInputStream(bis);
+
+        try {
+            ZrePeer p = new ZrePeer();
+
+            p.identity = readNullable(is);
+            p.endpoint = readNullable(is);
+            p.evasive_at = is.readLong();
+            p.expired_at = is.readLong();
+            p.connected = is.readBoolean();
+            p.ready = is.readBoolean();
+            p.status = is.readInt();
+            p.sent_sequence = is.readInt();
+            p.want_sequence = is.readInt();
+            int nheaders = is.readInt();
+            if (nheaders > 0) {
+                p.headers = new HashMap<String, String>();
+                for (int i = 0; i < nheaders; i++) {
+                    String k = is.readUTF();
+                    String v = readNullable(is);
+                    p.headers.put(k, v);
+                }
+            }
+            is.close();
+
+            return p;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    static void writeNullable(DataOutputStream os, String m)
+        throws IOException {
+
+        os.writeBoolean(m != null);
+        if (m != null) {
+            os.writeUTF(m);
+        }
+    }
+
+    static String readNullable(DataInputStream os) throws IOException {
+        boolean present = os.readBoolean();
+        if (present) {
+            return os.readUTF();
+        }
+        return null;
+    }
+
+    static String tagString(Object x) {
+        if (x == null) {
+            return "null";
+        } else {
+            return x.getClass().getSimpleName() + "(" +
+                Integer.toHexString(System.identityHashCode(x)) + ")";
+        }
+    }
+
+    @Override
+    public String toString() {
+
+        return tagString(this) + " " +
+            identity + " " +
+            endpoint + " " +
+            " connected " + connected + " " +
+            " ready " + ready + " " +
+            " sent/want " + sent_sequence + "/" + want_sequence + " " +
+            tagString(ctx) + " " +
+            tagString(mailbox);
+    }
 }

@@ -142,6 +142,11 @@ public class ZreInterface
         pipe.sendMore (pathname);
         pipe.send (virtual);
     }
+
+    public void peer (String peerId) {
+        pipe.sendMore ("LOOKUP_PEER");
+        pipe.send (peerId);
+    }
     
     //  =====================================================================
     //  Asynchronous part, works in the background
@@ -324,6 +329,7 @@ public class ZreInterface
             return status;
         }
         
+        // TODO: what the heck is this for?????
         //  Delete peer for a given endpoint
         private void purgePeer ()
         {
@@ -476,8 +482,18 @@ public class ZreInterface
                 assert (rc);
                 file.write (filename, 0);
                 file.destroy ();
+            } else if (command.equals("LOOKUP_PEER")) {
+                String peerId = request.popString ();
+                ZrePeer peer = peers.get (peerId);
+                ZMsg msg = new ZMsg ();
+                msg.add ("PEER");
+                msg.add (peerId);
+                if (peer != null) {
+                    msg.add(peer.toFrame());
+                }
+                msg.send (pipe);
             }
-            
+
             request.destroy ();
             return true;
         }
